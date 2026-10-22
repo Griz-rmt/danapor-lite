@@ -242,7 +242,7 @@ with tab_struk:
             with st.spinner("Membaca struk dengan Gemini AI…"):
                 try:
                     st.session_state.scan_hasil = scan_struk(uploaded.getvalue())
-                    st.rerun()  # rerun agar form konfirmasi langsung muncul bersih
+                    # TIDAK st.rerun() di sini — biarkan form langsung tampil di bawah
                 except Exception as e:
                     st.error(f"Gagal membaca struk: {e}")
 
