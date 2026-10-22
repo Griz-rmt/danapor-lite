@@ -216,10 +216,7 @@ with tab_struk:
     st.session_state.active_tab = "struk"
 
     st.subheader("Scan Struk Belanja")
-
-    # Di HP: tombol upload akan membuka pilihan "Ambil Foto" atau "Pilih dari Galeri"
-    # Di desktop: bisa upload file gambar langsung
-    st.info("📱 **Di HP:** Tap tombol di bawah → pilih **Kamera** untuk foto langsung\n\n� **Di PC:** Upload file foto struk", icon="💡")
+    st.info("📱 **Di HP:** Tap tombol di bawah → pilih **Kamera** untuk foto langsung\n\n💻 **Di PC:** Upload file foto struk", icon="💡")
 
     uploaded = st.file_uploader(
         "Foto atau upload struk belanja",
@@ -229,25 +226,25 @@ with tab_struk:
     )
 
     if uploaded is None:
+        # Tidak ada foto — bersihkan state
         st.session_state.scan_hasil    = None
         st.session_state.scan_image_id = None
 
-    elif uploaded.file_id != st.session_state.scan_image_id:
-        st.session_state.scan_image_id = uploaded.file_id
-        st.session_state.scan_hasil    = None
-
+    else:
         # Tampilkan preview foto
         st.image(uploaded, caption="Foto struk", use_container_width=True)
 
-        with st.spinner("Membaca struk dengan Gemini AI…"):
-            try:
-                st.session_state.scan_hasil = scan_struk(uploaded.getvalue())
-            except Exception as e:
-                st.error(f"Gagal membaca struk: {e}")
+        if uploaded.file_id != st.session_state.scan_image_id:
+            # Foto BARU → proses dengan AI
+            st.session_state.scan_image_id = uploaded.file_id
+            st.session_state.scan_hasil    = None
 
-    else:
-        # Foto sama, sudah diproses — tampilkan preview saja
-        st.image(uploaded, caption="Foto struk", use_container_width=True)
+            with st.spinner("Membaca struk dengan Gemini AI…"):
+                try:
+                    st.session_state.scan_hasil = scan_struk(uploaded.getvalue())
+                    st.rerun()  # rerun agar form konfirmasi langsung muncul bersih
+                except Exception as e:
+                    st.error(f"Gagal membaca struk: {e}")
 
     hasil = st.session_state.scan_hasil
     if hasil:
