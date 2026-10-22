@@ -1,5 +1,6 @@
 import io
 import json
+import time
 import sqlite3
 import calendar
 import pandas as pd
@@ -7,6 +8,7 @@ import streamlit as st
 from datetime import datetime
 from PIL import Image
 from google import genai
+from google.genai.errors import ServerError
 
 # =============================================================================
 # KONFIGURASI
@@ -79,12 +81,35 @@ Aturan:
 2. Jika tanggal tidak terbaca, gunakan tanggal hari ini.
 3. Output HANYA JSON valid, tanpa penjelasan apapun.
 """
-    response = client.models.generate_content(
-        model="gemini-3.8-flash",
-        contents=[Image.open(io.BytesIO(image_bytes)), prompt]
-    )
-    clean = response.text.replace("```json", "").replace("```", "").strip()
-    return json.loads(clean)
+    # Urutan fallback: coba model utama dulu, fallback ke lite jika 503
+    MODELS   = ["gemini-3.8-flash", "gemini-3.5-flash-lite"]
+    RETRIES  = 2   # percobaan per model
+    DELAY    = 3   # detik antar retry
+
+    last_error = None
+    for model in MODELS:
+        for attempt in range(1, RETRIES + 1):
+            try:
+                response = client.models.generate_content(
+                    model=model,
+                    contents=[Image.open(io.BytesIO(image_bytes)), prompt]
+                )
+                clean = response.text.replace("```json", "").replace("```", "").strip()
+                return json.loads(clean)
+            except ServerError as e:
+                last_error = e
+                if e.code == 503:
+                    if attempt < RETRIES:
+                        st.toast(f"Server sibuk ({model}), mencoba ulang…", icon="⏳")
+                        time.sleep(DELAY)
+                    else:
+                        st.toast(f"Beralih ke model cadangan…", icon="🔄")
+                        break   # keluar dari retry loop, coba model berikutnya
+                else:
+                    raise   # error selain 503 langsung lempar
+
+    # Semua model gagal
+    raise last_error
 
 # =============================================================================
 # HELPERS UI
