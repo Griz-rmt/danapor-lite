@@ -171,54 +171,72 @@ with tab_struk:
     st.subheader("Scan Struk Belanja")
     st.caption("Foto struk akan dibaca otomatis oleh AI. Kamu bisa koreksi hasilnya sebelum disimpan.")
 
+    # Inisialisasi session state untuk menyimpan hasil scan
+    if "scan_hasil" not in st.session_state:
+        st.session_state.scan_hasil = None
+    if "scan_image_id" not in st.session_state:
+        st.session_state.scan_image_id = None
+
     kamera_file = st.camera_input("📸  Arahkan kamera ke struk")
 
-    if kamera_file:
+    if kamera_file is None:
+        # Kamera dibersihkan/direset → hapus hasil scan sebelumnya
+        st.session_state.scan_hasil = None
+        st.session_state.scan_image_id = None
+
+    elif kamera_file.file_id != st.session_state.scan_image_id:
+        # Foto BARU diambil → panggil AI (hanya sekali per foto)
+        st.session_state.scan_image_id = kamera_file.file_id
+        st.session_state.scan_hasil = None
+
         with st.spinner("Membaca struk dengan Gemini AI…"):
             try:
-                hasil = scan_struk(kamera_file.getvalue())
-                st.success("Struk berhasil dibaca! Periksa dan koreksi data di bawah sebelum menyimpan.")
+                st.session_state.scan_hasil = scan_struk(kamera_file.getvalue())
             except Exception as e:
                 st.error(f"Gagal membaca struk: {e}")
-                hasil = None
 
-        if hasil:
-            st.divider()
-            st.markdown("#### ✏️ Koreksi Data Struk")
-            st.info("Semua field bisa diubah jika AI salah membaca.", icon="ℹ️")
+    # Tampilkan form koreksi jika hasil scan tersedia
+    hasil = st.session_state.scan_hasil
+    if hasil:
+        st.success("Struk berhasil dibaca! Periksa dan koreksi data di bawah sebelum menyimpan.")
+        st.divider()
+        st.markdown("#### ✏️ Koreksi Data Struk")
+        st.info("Semua field bisa diubah jika AI salah membaca.", icon="ℹ️")
 
-            with st.form("form_struk"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    # parse tanggal – fallback ke hari ini jika gagal
-                    try:
-                        tgl_default = datetime.strptime(hasil.get("tanggal", ""), "%Y-%m-%d").date()
-                    except (ValueError, TypeError):
-                        tgl_default = datetime.now().date()
+        with st.form("form_struk"):
+            col1, col2 = st.columns(2)
+            with col1:
+                try:
+                    tgl_default = datetime.strptime(hasil.get("tanggal", ""), "%Y-%m-%d").date()
+                except (ValueError, TypeError):
+                    tgl_default = datetime.now().date()
 
-                    tgl_struk = st.date_input("Tanggal", tgl_default)
-                    nom_struk = st.number_input(
-                        "Nominal Total (Rp)",
-                        value=int(hasil.get("nominal", 0)),
-                        min_value=0,
-                        step=1_000,
-                        format="%d"
-                    )
-                with col2:
-                    kat_default = hasil.get("kategori", "Lainnya")
-                    kat_index   = KATEGORI_PENGELUARAN.index(kat_default) if kat_default in KATEGORI_PENGELUARAN else len(KATEGORI_PENGELUARAN) - 1
-                    kat_struk   = st.selectbox("Kategori", KATEGORI_PENGELUARAN, index=kat_index)
-                    cat_struk   = st.text_input("Catatan / Nama Toko", value=hasil.get("catatan", ""))
+                tgl_struk = st.date_input("Tanggal", tgl_default)
+                nom_struk = st.number_input(
+                    "Nominal Total (Rp)",
+                    value=int(hasil.get("nominal", 0)),
+                    min_value=0,
+                    step=1_000,
+                    format="%d"
+                )
+            with col2:
+                kat_default = hasil.get("kategori", "Lainnya")
+                kat_index   = KATEGORI_PENGELUARAN.index(kat_default) if kat_default in KATEGORI_PENGELUARAN else len(KATEGORI_PENGELUARAN) - 1
+                kat_struk   = st.selectbox("Kategori", KATEGORI_PENGELUARAN, index=kat_index)
+                cat_struk   = st.text_input("Catatan / Nama Toko", value=hasil.get("catatan", ""))
 
-                simpan_struk = st.form_submit_button("💾  Simpan ke Riwayat", use_container_width=True, type="primary")
+            simpan_struk = st.form_submit_button("💾  Simpan ke Riwayat", use_container_width=True, type="primary")
 
-            if simpan_struk:
-                if nom_struk <= 0:
-                    st.warning("Nominal harus lebih dari 0.")
-                else:
-                    insert_transaksi(tgl_struk, "Pengeluaran", kat_struk, nom_struk, cat_struk)
-                    st.success(f"Transaksi dari struk sebesar **{fmt_rupiah(nom_struk)}** berhasil disimpan.")
-                    st.rerun()
+        if simpan_struk:
+            if nom_struk <= 0:
+                st.warning("Nominal harus lebih dari 0.")
+            else:
+                insert_transaksi(tgl_struk, "Pengeluaran", kat_struk, nom_struk, cat_struk)
+                st.success(f"Transaksi dari struk sebesar **{fmt_rupiah(nom_struk)}** berhasil disimpan.")
+                # Bersihkan state setelah berhasil simpan
+                st.session_state.scan_hasil = None
+                st.session_state.scan_image_id = None
+                st.rerun()
 
 # =============================================================================
 # TAB 3 – RIWAYAT
