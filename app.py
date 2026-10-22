@@ -212,7 +212,7 @@ with tab_riwayat:
             saldo        = total_masuk - total_keluar
 
             c1, c2, c3 = st.columns(3)
-            c1.metric("💚 Pemasukan",   fmt_rupiah(total_masuk))
+            c1.metric("🟢 Pemasukan",   fmt_rupiah(total_masuk))
             c2.metric("🔴 Pengeluaran", fmt_rupiah(total_keluar))
             if saldo > 0:
                 c3.metric("Saldo Bulan", fmt_rupiah(saldo),
