@@ -120,16 +120,26 @@ with tab_catat:
 
     opsi_kat = KATEGORI_PENGELUARAN if jenis_input == "Pengeluaran" else KATEGORI_PEMASUKAN
 
+    # Selectbox & field custom kategori di LUAR form agar langsung reaktif
+    col_kat1, col_kat2 = st.columns(2)
+    with col_kat1:
+        kat_pilih = st.selectbox("Kategori", opsi_kat, key="kat_pilih")
+    with col_kat2:
+        if kat_pilih == "Lainnya...":
+            kat_custom = st.text_input("Tulis kategori", placeholder="contoh: Kesehatan, Hobi…", key="kat_custom")
+        else:
+            kat_custom = ""
+            st.empty()  # jaga layout tetap simetris
+
     with st.form("form_manual", clear_on_submit=True):
         col1, col2 = st.columns(2)
         with col1:
             tgl = st.date_input("Tanggal", datetime.now().date())
             nom = st.number_input("Nominal (Rp)", min_value=0, step=1_000, format="%d")
         with col2:
-            kat_pilih  = st.selectbox("Kategori", opsi_kat)
-            kat_custom = ""
-            if kat_pilih == "Lainnya...":
-                kat_custom = st.text_input("Tulis kategori", placeholder="contoh: Kesehatan, Hobi…")
+            # Tampilkan info kategori yang sudah dipilih di atas (read-only di dalam form)
+            kat_display = kat_custom.strip() if kat_pilih == "Lainnya..." else kat_pilih
+            st.text_input("Kategori dipilih", value=kat_display, disabled=True)
 
         cat = st.text_area(
             "Catatan / Deskripsi",
