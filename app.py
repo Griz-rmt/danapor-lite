@@ -11,7 +11,7 @@ from google import genai
 # =============================================================================
 # KONFIGURASI
 # =============================================================================
-GEMINI_API_KEY = "AIzaSyC6PgrB4J_ZvUs7J6aX3qPVFDXKBcEtWsc"
+GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 KATEGORI_PENGELUARAN = ["Makanan", "Belanja", "Transportasi", "Tagihan", "Lainnya"]
