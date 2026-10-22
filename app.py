@@ -80,7 +80,7 @@ Aturan:
 3. Output HANYA JSON valid, tanpa penjelasan apapun.
 """
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-3.8-flash",
         contents=[Image.open(io.BytesIO(image_bytes)), prompt]
     )
     clean = response.text.replace("```json", "").replace("```", "").strip()
