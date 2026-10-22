@@ -224,32 +224,68 @@ with tab_struk:
         ["Portrait", "Landscape"],
         horizontal=True,
         key="orientasi_kamera",
-        help="Sesuaikan dengan posisi HP saat memotret struk"
+        help="Pilih Portrait untuk struk tegak, Landscape untuk struk lebar"
     )
 
-    # Ukuran frame kamera menyesuaikan orientasi
-    cam_w = 400 if orientasi == "Portrait" else 640
+    # CSS portrait: paksa aspect-ratio 3:4, video di-rotate & crop
+    # CSS landscape: aspect-ratio 4:3 natural
+    if orientasi == "Portrait":
+        css_kamera = """
+        <style>
+        /* Wrapper container kamera */
+        [data-testid="stCameraInput"] > div:first-child {
+            aspect-ratio: 3 / 4 !important;
+            width: 100% !important;
+            overflow: hidden !important;
+            position: relative !important;
+            border-radius: 8px !important;
+        }
+        /* Video feed: rotate 90deg dan scale agar memenuhi container portrait */
+        [data-testid="stCameraInput"] video {
+            position: absolute !important;
+            top: 50% !important;
+            left: 50% !important;
+            width: 133% !important;
+            height: 133% !important;
+            transform: translate(-50%, -50%) rotate(90deg) !important;
+            object-fit: cover !important;
+        }
+        /* Foto hasil capture juga portrait */
+        [data-testid="stCameraInput"] img {
+            width: 100% !important;
+            aspect-ratio: 3 / 4 !important;
+            object-fit: cover !important;
+            border-radius: 8px !important;
+        }
+        </style>
+        """
+    else:
+        css_kamera = """
+        <style>
+        [data-testid="stCameraInput"] > div:first-child {
+            aspect-ratio: 4 / 3 !important;
+            width: 100% !important;
+            overflow: hidden !important;
+            border-radius: 8px !important;
+        }
+        [data-testid="stCameraInput"] video {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover !important;
+        }
+        [data-testid="stCameraInput"] img {
+            width: 100% !important;
+            border-radius: 8px !important;
+        }
+        </style>
+        """
+
+    st.markdown(css_kamera, unsafe_allow_html=True)
 
     # Kamera HANYA dirender di tab ini
     kamera_file = st.camera_input(
         "📸  Arahkan kamera ke struk",
         key="kamera_struk",
-    )
-
-    # Inject CSS untuk mengatur lebar preview kamera sesuai orientasi
-    st.markdown(
-        f"""
-        <style>
-        [data-testid="stCameraInput"] video,
-        [data-testid="stCameraInput"] img {{
-            max-width: {cam_w}px !important;
-            width: 100% !important;
-            margin: auto;
-            display: block;
-        }}
-        </style>
-        """,
-        unsafe_allow_html=True,
     )
 
     if kamera_file is None:
