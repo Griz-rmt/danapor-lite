@@ -5,6 +5,7 @@ import sqlite3
 import calendar
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 from datetime import datetime
 from PIL import Image
 from google import genai
@@ -218,37 +219,135 @@ with tab_struk:
     st.subheader("Scan Struk Belanja")
     st.caption("Foto struk akan dibaca otomatis oleh AI. Kamu bisa koreksi hasilnya sebelum disimpan.")
 
-    # CSS minimal: biarkan kamera mengisi lebar layar secara natural
-    st.markdown("""
-        <style>
-        [data-testid="stCameraInput"] video,
-        [data-testid="stCameraInput"] img {
-            width: 100% !important;
-            height: auto !important;
-            border-radius: 8px !important;
+    # Inisialisasi session state upload hasil foto custom
+    if "cam_photo_b64" not in st.session_state:
+        st.session_state.cam_photo_b64 = None
+
+    # Komponen kamera custom resolusi tinggi via getUserMedia
+    # Menggunakan st.components untuk HTML/JS — foto dikirim balik via query param trick
+    cam_html = """
+    <style>
+      #cam-wrap { width:100%; text-align:center; font-family:sans-serif; }
+      #cam-video { width:100%; max-height:60vh; border-radius:8px; background:#000; display:block; }
+      #cam-canvas { display:none; }
+      #cam-preview { width:100%; border-radius:8px; margin-top:8px; display:none; }
+      .cam-btn {
+        margin-top:10px; padding:10px 28px; font-size:16px;
+        border:none; border-radius:6px; cursor:pointer;
+        background:#ff4b4b; color:white; width:100%;
+      }
+      .cam-btn.secondary { background:#555; margin-top:6px; }
+      #cam-status { margin-top:8px; font-size:13px; color:#aaa; }
+    </style>
+    <div id="cam-wrap">
+      <video id="cam-video" autoplay playsinline></video>
+      <canvas id="cam-canvas"></canvas>
+      <img id="cam-preview" alt="Foto struk"/>
+      <button class="cam-btn" id="btn-capture">📸 Ambil Foto</button>
+      <button class="cam-btn secondary" id="btn-retake" style="display:none">🔄 Foto Ulang</button>
+      <button class="cam-btn" id="btn-send" style="display:none">✅ Gunakan Foto Ini</button>
+      <div id="cam-status">Memulai kamera…</div>
+    </div>
+    <script>
+      const video   = document.getElementById('cam-video');
+      const canvas  = document.getElementById('cam-canvas');
+      const preview = document.getElementById('cam-preview');
+      const btnCap  = document.getElementById('btn-capture');
+      const btnRet  = document.getElementById('btn-retake');
+      const btnSend = document.getElementById('btn-send');
+      const status  = document.getElementById('cam-status');
+
+      // Minta kamera dengan resolusi setinggi yang didukung perangkat
+      const constraints = {
+        video: {
+          facingMode: { ideal: 'environment' },   // kamera belakang
+          width:  { ideal: 4096 },
+          height: { ideal: 3072 }
         }
-        </style>
-    """, unsafe_allow_html=True)
+      };
 
-    # Kamera HANYA dirender di tab ini
-    kamera_file = st.camera_input(
-        "📸  Arahkan kamera ke struk",
-        key="kamera_struk",
-    )
+      navigator.mediaDevices.getUserMedia(constraints)
+        .then(stream => {
+          video.srcObject = stream;
+          video.onloadedmetadata = () => {
+            status.textContent = `Kamera aktif: ${video.videoWidth}×${video.videoHeight}`;
+          };
+        })
+        .catch(err => { status.textContent = 'Gagal mengakses kamera: ' + err.message; });
 
-    if kamera_file is None:
-        st.session_state.scan_hasil    = None
-        st.session_state.scan_image_id = None
+      btnCap.addEventListener('click', () => {
+        canvas.width  = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0);
 
-    elif kamera_file.file_id != st.session_state.scan_image_id:
-        st.session_state.scan_image_id = kamera_file.file_id
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+        preview.src   = dataUrl;
+        preview.style.display = 'block';
+        video.style.display   = 'none';
+        btnCap.style.display  = 'none';
+        btnRet.style.display  = 'block';
+        btnSend.style.display = 'block';
+        status.textContent    = `Foto diambil: ${canvas.width}×${canvas.height}`;
+      });
+
+      btnRet.addEventListener('click', () => {
+        preview.style.display = 'none';
+        video.style.display   = 'block';
+        btnCap.style.display  = 'block';
+        btnRet.style.display  = 'none';
+        btnSend.style.display = 'none';
+        status.textContent    = 'Siap mengambil foto…';
+      });
+
+      btnSend.addEventListener('click', () => {
+        // Kirim base64 ke Streamlit via sessionStorage + reload trick
+        const b64 = preview.src.split(',')[1];
+        window.parent.postMessage({ type: 'CAM_PHOTO', data: b64 }, '*');
+        status.textContent = '✅ Foto dikirim ke AI…';
+        btnSend.disabled = true;
+      });
+    </script>
+    """
+
+    # Terima pesan dari komponen via st.components query workaround
+    # Gunakan file_uploader sebagai fallback jika JS postMessage tidak bisa diterima
+    st.info("Gunakan kamera di bawah, atau upload foto struk langsung.", icon="💡")
+
+    col_cam, col_up = st.columns([2, 1])
+    with col_cam:
+        st.components.v1.html(cam_html, height=560, scrolling=False)
+
+    with col_up:
+        st.caption("atau upload foto")
+        uploaded = st.file_uploader(
+            "Upload foto struk",
+            type=["jpg", "jpeg", "png"],
+            key="upload_struk",
+            label_visibility="collapsed"
+        )
+
+    # Tentukan sumber gambar: upload diprioritaskan karena bisa langsung dibaca Python
+    img_bytes = None
+    img_id    = None
+
+    if uploaded is not None:
+        img_bytes = uploaded.getvalue()
+        img_id    = uploaded.file_id
+
+    if img_bytes is not None and img_id != st.session_state.scan_image_id:
+        st.session_state.scan_image_id = img_id
         st.session_state.scan_hasil    = None
 
         with st.spinner("Membaca struk dengan Gemini AI…"):
             try:
-                st.session_state.scan_hasil = scan_struk(kamera_file.getvalue())
+                st.session_state.scan_hasil = scan_struk(img_bytes)
             except Exception as e:
                 st.error(f"Gagal membaca struk: {e}")
+
+    elif img_bytes is None and uploaded is None:
+        # Reset jika tidak ada gambar
+        if st.session_state.scan_image_id is not None and not st.session_state.scan_hasil:
+            st.session_state.scan_image_id = None
 
     hasil = st.session_state.scan_hasil
     if hasil:
